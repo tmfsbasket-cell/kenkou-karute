@@ -4,12 +4,94 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>けんこうカルテ</title>
+<!-- ホーム画面アイコン: 同じ場所に icon.png を置くと有効になる -->
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" type="image/png" href="icon.png">
 <meta name="theme-color" content="#2E7D6B">
+<!-- PWA設定: ホーム画面から起動するとブラウザのバーが消えてアプリ表示になる -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="けんこうカルテ">
 <!--
   ============================================================
-  健康管理アプリ MVP v0.14
+  健康管理アプリ MVP v0.18
+  v0.18: 基本情報の「鮮度」対策(薬・アレルギー等は登録後に変わりやすいため)
+   - 基本情報の保存日時を記録(group1SavedAt)
+   - 診察用サマリーの基本情報見出しに「最終更新: ◯年◯月◯日」を併記
+     (医師が情報の鮮度を見て自分で判断できる。注意書きを増やさずに
+      全項目の鮮度を一度に伝える)
+   - サマリー作成時、基本情報の保存から90日以上たっていたら
+     「薬などに変わりはありませんか?」と一度だけ確認を表示
+     (更新の動機がいちばん高い受診直前に声をかける。
+      「変わった」を選ぶと基本情報の画面へ誘導)
+   - 保存日時が未記録の既存データは「古い可能性あり」として扱い、
+     次回の基本情報保存で日時が記録される
+  v0.17.3: 診察用サマリーのアレルギー表示を安全側に修正(ICU看護師の発案)
+   - 記載の有無にかかわらず「口頭でもご確認ください」の注意書きを常時表示
+     (プロフィール登録後に発覚したアレルギーは反映されない可能性があるため。
+      紙の記載を鵜呑みにせず、診察時の口頭確認を促す)
+   - 空欄時の表示を「なし(本人申告)」→「記入なし」に変更
+     (未記入を「なし」と断定表示すると、未確認なのに確認済みと
+      誤読されるリスクがあるため。なし≠未確認の区別)
+  v0.17.2: コードレビューでの修正・整理
+   - isStandalone: navigator.standalone をオプショナルチェイニングで安全に参照
+   - labWorryActive: 不要な typeof ガードを削除して整理
+   - レビュー版に混入していた誤字(「AI的回答」)と、ねこの通常顔の
+     目のサイズ不一致(4.5→5.5)を修正
+   - レビュー版で途切れていたファイル末尾(サマリー生成・起動処理)を復元
+  v0.17.1: バナーの表示間隔を起動方法で出し分け
+   - ホーム画面から起動(standalone表示)の場合: 30日ごと
+     (7日間削除ルールの対象外でデータ消失リスクが低いため、控えめに)
+   - ブラウザで開いている場合: 従来どおり7日ごと
+     (Safariの7日間削除ルールのリスクがあるため、こまめに声かけ)
+   - Android Chromeには7日間削除ルール自体が無いが、故障・機種変更への
+     備えとしてのバックアップ習慣づけは共通なので同じ間隔を適用
+   - 「メモ10件たまったら表示」の条件は両者共通で従来どおり
+  v0.17: バックアップUXの改善
+   - リマインダーバナーに「今すぐバックアップ」ボタンを追加
+     (バナーから設定画面を経由せず、ワンタップで保存が完了する)
+   - 保存完了時のトーストで保存先(「ファイル」アプリのダウンロード)を案内
+     (あとから「どこに保存された?」と迷子になるのを防ぐ)
+   - 「記録をもどす」ボタンの近くに「いちばん新しい日付のファイルを
+     選んでください」のヒントを常時表示(復元時の迷子防止)
+   - バックアップ処理を doExport() に共通化(設定画面とバナーの両方から呼ぶ)
+   - ファイル名は従来どおり日付入り(けんこうカルテの記録_YYYY-MM-DD.json)。
+     上書き保存はWebアプリの制約でできないため、日付で最新版を見分ける設計
+  v0.16.1: PWAレビューでの修正
+   - 全画面起動時に画面上部がステータスバー(時計・ノッチ)に隠れる問題を修正
+     (アプリ本体とサマリー画面に安全余白 env(safe-area-inset-top) を追加)
+   - sw.js: オフライン時のindex.html代替を「ページ表示」に限定
+     (画像などのリクエストにHTMLを返す誤動作を防止)
+  v0.16: PWA化(ほぼネイティブアプリ体験に)
+   - manifest.json追加(アプリ名・アイコン・standalone表示の定義)
+   - sw.js追加(ネットワーク優先のオフライン対応。オンライン時は常に最新、
+     オフライン時は最後のキャッシュから起動。更新の流れは今まで通り)
+   - ホーム画面から起動するとSafariのバーが消えて全画面アプリ表示に
+   - sw.js等が無い環境でも今まで通り動く(登録失敗は静かにスキップ)
+   - アイコン生成(柴犬×緑背景・A案。icon.png / icon-512.png)
+  v0.15.1: コードレビューでの修正
+   - 印刷時にオーバーレイのfixed配置を解除(検査項目が多く2ページ以上に
+     なる場合、1ページ目しか印刷されないブラウザがあった)
+   - 表の行がページ境界で分断されないよう改ページ制御を追加
+   - ホーム画面起動時に印刷が開かない場合の案内文を追加
+  v0.15: 診察用サマリー(出力モード③)を実装
+   - AI相談画面に「診察用サマリー」カードを追加
+   - 「今日伝えたいこと」を最上部に大きく表示(主訴を言葉にするのが
+     苦手な人のための欄。ICU看護師の発案)
+   - 基本情報(アレルギーを枠で強調・内服薬・既往歴・家族歴)
+     +検査値の表(直近3回・判定つき・C/D判定を先頭に太字)
+   - ブラウザの印刷機能でPDF保存/印刷(iPhoneは印刷プレビューから共有でPDF化)
+   - 日々のメモ(私的な記録)は載せない(プライバシー分離の設計)
+   - 「本人の自己申告のまとめであり診断書ではない」旨を明記
+  v0.14.1: 実機テスト(iPhone Safari)のフィードバック反映
+   - 検査日・生まれた年月などの日付入力欄が画面からはみ出す問題を修正
+     (Safariの独自描画を無効化して幅を収めた)
+   - 推移セルの数値の色を「その回の値に対する判定色」に変更
+     (A緑/B黄/C橙/D深橙。バッジと同じ色で値と判定がつながる。
+      過去の値にも当時の判定色が付くので改善・悪化が色で読める。
+      従来の青はSafariのボタン既定色で意図しない表示だった)
   v0.14: レビュー提案1〜4を実装
    - 相棒の心配顔に30日の期限(検査値を追加・修正してから30日間だけ。
      慢性的にC判定が続く人の相棒が永遠に心配顔になる「アラーム疲労」を防ぐ)
@@ -69,7 +151,7 @@
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
   }
-  #app { max-width: 480px; margin: 0 auto; min-height: 100dvh; padding-bottom: 90px; }
+  #app { max-width: 480px; margin: 0 auto; min-height: 100dvh; padding-bottom: 90px; padding-top: env(safe-area-inset-top); }
 
   .screen { display: none; padding: 20px 18px; }
   .screen.active { display: block; }
@@ -111,6 +193,14 @@
     padding: 12px; background: #fff; color: var(--ink);
   }
   input:focus, textarea:focus, select:focus { outline: 2px solid var(--primary); border-color: var(--primary); }
+  /* iOS Safariの日付系入力は独自描画で幅がはみ出すため、標準描画に切り替えて幅を収める */
+  input[type="date"], input[type="month"], input[type="datetime-local"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+    background: #fff;
+  }
   label { display: block; font-size: .85rem; font-weight: 600; margin: 12px 0 6px; }
 
   .set-row {
@@ -146,10 +236,16 @@
     flex: 1; text-align: center; border-radius: 10px;
     padding: 6px 4px 7px; background: #F6F9FA;
     border: none; font-family: inherit; cursor: pointer;
+    color: var(--ink); /* Safariのボタン既定色(青)を打ち消す */
   }
   .lab-hist-cell.latest { background: #EDF5F2; border: 1.5px solid var(--primary); }
   .lab-hist-cell .lh-date { font-size: .65rem; color: var(--ink-soft); display: block; }
   .lab-hist-cell .lh-val { font-size: .95rem; font-weight: 700; display: block; line-height: 1.3; }
+  /* 値の色を判定バッジと同じ色に(その回の値に対する判定色) */
+  .lh-val.gv-A { color: #2E7D6B; }
+  .lh-val.gv-B { color: #A9791F; }
+  .lh-val.gv-C { color: #C1702E; }
+  .lh-val.gv-D { color: #B4543F; }
   .lab-hist-cell .lh-diff { font-size: .65rem; color: var(--ink-soft); display: block; }
   .lab-hist-cell .lh-diff.up { color: #C1702E; }
   .lab-hist-cell .lh-diff.down { color: #2E7D6B; }
@@ -323,6 +419,62 @@
   nav button.active { color: var(--primary-deep); font-weight: 700; }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  /* ---- 診察用サマリー ---- */
+  #summaryOverlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: #fff; overflow-y: auto;
+    padding: calc(16px + env(safe-area-inset-top)) 16px 60px;
+  }
+  #summaryOverlay[hidden] { display: none; }
+  .summary-actions { max-width: 640px; margin: 0 auto 14px; }
+  .summary-actions button { margin-bottom: 8px; }
+  #printSheet {
+    max-width: 640px; margin: 0 auto;
+    color: #111; font-size: 12.5px; line-height: 1.55;
+  }
+  #printSheet h1 {
+    font-size: 16px; margin: 0 0 2px; letter-spacing: .02em;
+  }
+  #printSheet .sheet-date { font-size: 11px; color: #555; margin-bottom: 10px; }
+  #printSheet .chief {
+    border: 2px solid #111; border-radius: 6px;
+    padding: 8px 10px; margin-bottom: 12px;
+  }
+  #printSheet .chief .chief-label { font-size: 10.5px; font-weight: 700; }
+  #printSheet .chief .chief-text { font-size: 14px; font-weight: 700; }
+  #printSheet h2 {
+    font-size: 13px; margin: 12px 0 4px; padding-bottom: 2px;
+    border-bottom: 1.5px solid #111;
+  }
+  #printSheet .kv { margin: 2px 0; }
+  #printSheet .kv b { display: inline-block; min-width: 6em; }
+  #printSheet .allergy { border: 1.5px solid #111; padding: 4px 8px; border-radius: 5px; font-weight: 700; margin: 4px 0; }
+  #printSheet table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  #printSheet th, #printSheet td {
+    border: 1px solid #999; padding: 3px 6px; text-align: left; font-size: 11.5px;
+  }
+  #printSheet th { background: #f0f0f0; font-weight: 700; }
+  #printSheet td.flag { font-weight: 700; }
+  #printSheet .sheet-note { font-size: 9.5px; color: #555; margin-top: 10px; line-height: 1.5; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #printSheet, #printSheet * { visibility: visible; }
+    /* fixed配置のままだと2ページ目以降が印刷されないブラウザがあるため、
+       印刷時はオーバーレイを通常配置に戻す */
+    #summaryOverlay {
+      position: static !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+    #printSheet { position: absolute; left: 0; top: 0; width: 100%; max-width: none; margin: 0; }
+    #printSheet table tr { page-break-inside: avoid; }
+    #printSheet h2 { page-break-after: avoid; }
+    .no-print { display: none !important; }
+    nav, .toast { display: none !important; }
+  }
+  @page { margin: 12mm; }
 </style>
 </head>
 <body>
@@ -366,9 +518,9 @@
   <section class="screen" id="screen-home">
     <div class="banner" id="backupBanner" hidden>
       <strong>そろそろ記録の保存をしませんか?</strong><br>
-      <span class="note">記録はこのスマホの中にだけあります。ファイルに保存しておくと、もしもの時も安心です。</span>
+      <span class="note">記録はこのスマホの中にだけあります。ボタンひとつでファイルに保存できます。</span>
       <div class="banner-btns">
-        <button id="bannerBtn">設定をひらいて保存する</button>
+        <button id="bannerBtn">今すぐバックアップ</button>
         <button id="bannerLaterBtn">あとで</button>
       </div>
     </div>
@@ -554,6 +706,15 @@
       <p class="note" style="margin-top:8px">コピーしたら、お使いのAIアプリ(ChatGPT・Claude・Geminiなど)に貼り付けて送信してください。</p>
     </div>
 
+    <div class="card">
+      <h2>診察用サマリー</h2>
+      <p class="note">お医者さんに見せるA4一枚を作ります。基本情報と検査値だけをまとめます。日々のメモ(私的な記録)は載りません。</p>
+      <label for="chiefComplaint">今日伝えたいこと(任意・いちばん上に大きく載ります)</label>
+      <textarea id="chiefComplaint" rows="2" placeholder="例: 3週間前から朝の頭痛が続いている"></textarea>
+      <div style="height:10px"></div>
+      <button class="btn-ghost" id="summaryBtn">サマリーを作る</button>
+    </div>
+
     <p class="fixed-caution">AIの回答は参考情報です。必ず医師に相談してください。</p>
   </section>
 
@@ -563,11 +724,12 @@
 
     <div class="card">
       <h2>記録の保存(バックアップ)</h2>
-      <p class="note">記録はこのスマホの中にだけあります。スマホの故障や機種変更に備えて、ときどき記録をファイルとして保存しておきましょう。保存したファイルは「ファイル」アプリなどに残ります。</p>
+      <p class="note">記録はこのスマホの中にだけあります。スマホの故障や機種変更に備えて、ときどき記録をファイルとして保存しておきましょう。保存したファイルは「ファイル」アプリの「ダウンロード」に、日付つきの名前で残ります。</p>
       <div style="height:10px"></div>
       <button class="btn-ghost" id="exportBtn">記録をファイルに保存する</button>
       <div style="height:8px"></div>
       <button class="btn-ghost" id="importBtn">保存したファイルから記録をもどす</button>
+      <p class="note" style="margin-top:6px">📌 もどすときは、いちばん新しい日付のファイルを選んでください。</p>
       <input type="file" id="importFile" accept=".json,application/json" hidden>
       <div style="height:8px"></div>
       <p class="note" id="lastExportNote"></p>
@@ -593,6 +755,16 @@
       <button class="btn-danger" id="deleteAllBtn">すべての記録を削除する</button>
     </div>
   </section>
+
+  <!-- 診察用サマリー(全画面・印刷用) -->
+  <div id="summaryOverlay" hidden>
+    <div class="summary-actions no-print">
+      <button class="btn-primary" id="printSummaryBtn">印刷 / PDFに保存</button>
+      <button class="btn-ghost" id="closeSummaryBtn">閉じる</button>
+      <p class="note" style="margin-top:8px">iPhoneでは「印刷」画面のプレビューを共有ボタンからPDFとして保存できます。ホーム画面のアプリから印刷が開かないときは、SafariでURLを直接開いてお試しください。</p>
+    </div>
+    <div id="printSheet"></div>
+  </div>
 
   <!-- 下部ナビ -->
   <nav id="bottomNav" hidden>
@@ -624,7 +796,8 @@ function defaultData() {
     lastExportAt: null,
     memosSinceExport: 0,
     bannerSnoozedDate: null,
-    lastLabTouchedAt: null
+    lastLabTouchedAt: null,
+    group1SavedAt: null
   };
 }
 
@@ -1029,8 +1202,8 @@ function hasSymptom(text) {
    (慢性的にC判定が続く人の相棒が永遠に心配顔になる「アラーム疲労」を防ぐ。
     気づきは新しい情報に対してだけ働かせる) */
 function labWorryActive() {
-  if (typeof hasFlaggedLab !== "function" || !hasFlaggedLab()) return false;
   if (!state.lastLabTouchedAt) return false;
+  if (!hasFlaggedLab()) return false;
   const days = (Date.now() - new Date(state.lastLabTouchedAt)) / 86400000;
   return days <= 30;
 }
@@ -1410,13 +1583,24 @@ function renderBuddy(mood, speechText) {
   $("#buddySpeech").textContent = line;
 }
 
+/* ホーム画面から起動されているか(standalone表示か)を判定する
+   - iOS/Android共通: display-mode: standalone のメディアクエリ
+   - 古いiOS向けの保険: navigator.standalone
+   ホーム画面起動ならSafariの7日間削除ルールの対象外なので、
+   バナーの間隔をゆるめる(30日)。ブラウザ起動は従来どおり7日 */
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+    || window.navigator?.standalone === true;
+}
+
 function backupDue() {
   const hasData = state.group3.length || state.group2.length || state.group1;
   if (!hasData) return false;
   if (state.memosSinceExport >= 10) return true;
   if (state.lastExportAt) {
     const days = (Date.now() - new Date(state.lastExportAt)) / 86400000;
-    if (days >= 7) return true;
+    const interval = isStandalone() ? 30 : 7;
+    if (days >= interval) return true;
   }
   return false;
 }
@@ -1555,12 +1739,8 @@ function initHome() {
     showToast("また明日おしらせするね");
   });
 
-  $("#bannerBtn").addEventListener("click", () => {
-    $("#renameChar").value = state.character.name;
-    $("#renameUser").value = state.character.userNickname;
-    updateExportNote();
-    showScreen("settings");
-  });
+  // v0.17: 設定画面を経由せず、その場でワンタップでバックアップを実行する
+  $("#bannerBtn").addEventListener("click", doExport);
 }
 
 /* ============================================================
@@ -1596,6 +1776,7 @@ function initG1() {
       supplements: splitLines($("#g1Supps").value),
       allergies: splitLines($("#g1Allergy").value)
     };
+    state.group1SavedAt = localISOString(new Date());
     saveData();
     showToast("基本情報を保存しました");
   });
@@ -1792,6 +1973,7 @@ function renderLabList() {
       wrap.appendChild(labItemBlock({
         name: "BMI", unit: "", series,
         hantei: judgeBMI(latest.value),
+        gradeOf: pt => { const j = judgeBMI(pt.value); return j ? j.grade : null; },
         editable: false,
         consultKey: "BMI"
       }));
@@ -1815,6 +1997,15 @@ function renderLabList() {
       wrap.appendChild(labItemBlock({
         name: "血圧", unit: "mmHg", series,
         hantei: pickWorse(js, jd),
+        gradeOf: pt => {
+          const s = sysRows.find(r => r.date === pt.date);
+          const d = diaByDate[pt.date];
+          const w = pickWorse(
+            s ? judgeLabValue("収縮期血圧", s.value) : null,
+            d ? judgeLabValue("拡張期血圧", d.value) : null
+          );
+          return w ? w.grade : null;
+        },
         editable: true, editItems: ["収縮期血圧", "拡張期血圧"],
         consultKey: "血圧"
       }));
@@ -1840,6 +2031,7 @@ function renderLabList() {
     wrap.appendChild(labItemBlock({
       name: "血糖", unit: "HbA1c% / 血糖mg/dL", series,
       hantei: g,
+      gradeOf: pt => { const gg = glucoseForDate(pt.date); return gg ? gg.grade : null; },
       ogtt: g && g.ogtt,
       editable: true, editItems: ["HbA1c", "空腹時血糖"],
       consultKey: "血糖"
@@ -1870,6 +2062,11 @@ function renderLabList() {
     wrap.appendChild(labItemBlock({
       name, unit: latest.unit || "", series,
       hantei, note,
+      gradeOf: pt => {
+        if (name === "クレアチニン" && crJudgmentSuppressed(pt.date)) return null;
+        const j = judgeLabValue(name, pt.value);
+        return j ? j.grade : null;
+      },
       editable: true, editItems: [name],
       consultKey: name
     }));
@@ -1935,6 +2132,9 @@ function labItemBlock(cfg) {
     cell.type = "button";
     cell.className = "lab-hist-cell" + (isLatest ? " latest" : "");
     const dateLabel = pt.date.slice(2).replace(/-/g, "/"); // 24/04/01
+    // その回の値に対する判定色(計算できる項目のみ)
+    const cellGrade = cfg.gradeOf ? cfg.gradeOf(pt) : null;
+    const valClass = "lh-val" + (cellGrade ? ` gv-${cellGrade}` : "");
     let diffHtml = "";
     // 前回比(そのセルの1つ前の値と比較。数値のときだけ)
     const idx = cfg.series.indexOf(pt);
@@ -1951,7 +2151,7 @@ function labItemBlock(cfg) {
     }
     cell.innerHTML =
       `<span class="lh-date">${dateLabel}</span>` +
-      `<span class="lh-val">${pt.value}</span>` + diffHtml;
+      `<span class="${valClass}">${pt.value}</span>` + diffHtml;
     if (cfg.editable) {
       cell.addEventListener("click", () => openLabEdit(block, cfg, pt.date));
       cell.setAttribute("aria-label", `${cfg.name} ${dateLabel} の値を編集`);
@@ -2085,22 +2285,30 @@ function renderAllMemos() {
 }
 
 /* ---------- 設定 ---------- */
+
+/* バックアップの実行(v0.17で共通化)
+   設定画面の「記録をファイルに保存する」と、ホームのバナーの
+   「今すぐバックアップ」の両方から呼ばれる。
+   ファイル名は日付入り(上書き保存はWebの制約でできないため、
+   「いちばん新しい日付=最新版」で見分ける設計) */
+function doExport() {
+  state.lastExportAt = localISOString(new Date());
+  state.memosSinceExport = 0;
+  saveData();
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `けんこうカルテの記録_${todayString()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  updateExportNote();
+  $("#backupBanner").hidden = true;
+  refreshSettingsDot();
+  showToast("保存しました!「ファイル」アプリのダウンロードに入っています");
+}
+
 function initSettings() {
-  $("#exportBtn").addEventListener("click", () => {
-    state.lastExportAt = localISOString(new Date());
-    state.memosSinceExport = 0;
-    saveData();
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `けんこうカルテの記録_${todayString()}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    updateExportNote();
-    $("#backupBanner").hidden = true;
-    refreshSettingsDot();
-    showToast("記録をファイルに保存しました");
-  });
+  $("#exportBtn").addEventListener("click", doExport);
 
   $("#importBtn").addEventListener("click", () => $("#importFile").click());
   $("#importFile").addEventListener("change", e => {
@@ -2257,6 +2465,196 @@ function startConsultForItem(item) {
 }
 
 /* ============================================================
+   7-c. 診察用サマリー(出力モード③: 医療機関向け1枚)
+   基本情報+検査値(判定つき)をA4一枚に整形して印刷/PDF保存。
+   日々のメモ(私的な記録)は含めない(プライバシー分離)。
+   ============================================================ */
+
+/* サマリー用に全項目のデータを集める(C・D判定を先頭に) */
+function collectSummaryItems() {
+  const byItem = {};
+  state.group2.forEach(r => { (byItem[r.item] = byItem[r.item] || []).push(r); });
+  Object.values(byItem).forEach(rows => rows.sort((a, b) => a.date.localeCompare(b.date)));
+  const items = [];
+
+  // BMI
+  if (byItem["体重"] && state.group1 && state.group1.heightCm) {
+    const series = byItem["体重"].map(r => ({ date: r.date, value: bmiForDate(r.date) })).filter(x => x.value != null);
+    if (series.length) {
+      const j = judgeBMI(series[series.length - 1].value);
+      items.push({ name: "BMI", unit: "", series, grade: j ? j.grade : null });
+    }
+  }
+  // 血圧
+  const sysRows = byItem["収縮期血圧"] || [];
+  const diaByDate = Object.fromEntries((byItem["拡張期血圧"] || []).map(r => [r.date, r]));
+  if (sysRows.length) {
+    const series = sysRows.map(r => ({
+      date: r.date,
+      value: diaByDate[r.date] ? `${r.value}/${diaByDate[r.date].value}` : String(r.value)
+    }));
+    const latest = sysRows[sysRows.length - 1];
+    const w = pickWorse(
+      judgeLabValue("収縮期血圧", latest.value),
+      diaByDate[latest.date] ? judgeLabValue("拡張期血圧", diaByDate[latest.date].value) : null
+    );
+    items.push({ name: "血圧", unit: "mmHg", series, grade: w ? w.grade : null });
+  }
+  // 血糖(組み合わせ)
+  const gDates = [...new Set(state.group2.filter(r => r.item === "HbA1c" || r.item === "空腹時血糖").map(r => r.date))].sort();
+  if (gDates.length) {
+    const hbByDate = Object.fromEntries((byItem["HbA1c"] || []).map(r => [r.date, r]));
+    const fpgByDate = Object.fromEntries((byItem["空腹時血糖"] || []).map(r => [r.date, r]));
+    const series = gDates.map(d => {
+      const p = [];
+      if (hbByDate[d]) p.push(`HbA1c ${hbByDate[d].value}%`);
+      if (fpgByDate[d]) p.push(`FPG ${fpgByDate[d].value}`);
+      return { date: d, value: p.join(" / ") };
+    });
+    const g = glucoseForDate(gDates[gDates.length - 1]);
+    items.push({ name: "血糖", unit: "", series, grade: g ? g.grade : null, ogtt: g && g.ogtt });
+  }
+  // その他
+  const paired = new Set(["収縮期血圧", "拡張期血圧", "HbA1c", "空腹時血糖"]);
+  const order = COMMON_ITEMS.map(c => c.item);
+  Object.keys(byItem)
+    .filter(n => !paired.has(n))
+    .sort((a, b) => {
+      const ia = order.indexOf(a), ib = order.indexOf(b);
+      if (ia >= 0 && ib >= 0) return ia - ib;
+      if (ia >= 0) return -1;
+      if (ib >= 0) return 1;
+      return a.localeCompare(b, "ja");
+    })
+    .forEach(name => {
+      const rows = byItem[name];
+      const j = latestJudgmentOf(name, rows);
+      items.push({
+        name, unit: rows[0].unit || "",
+        series: rows.map(r => ({ date: r.date, value: r.value })),
+        grade: j ? j.grade : null
+      });
+    });
+
+  // C・D判定を先頭に(医師が最初に見るべきものを上へ)
+  const rank = { D: 0, C: 1, B: 2, A: 3 };
+  return items.sort((a, b) => (rank[a.grade] ?? 4) - (rank[b.grade] ?? 4));
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function buildSummarySheet(chiefComplaint) {
+  const g = state.group1 || {};
+  const age = calcAge(g.birthYearMonth);
+  const bmi = calcBMI();
+  const today = formatDate(todayString());
+
+  let html = `<h1>診察用サマリー</h1>
+<p class="sheet-date">作成日: ${today}(本人がアプリで作成した自己申告情報)</p>`;
+
+  if (chiefComplaint) {
+    html += `<div class="chief"><span class="chief-label">今日伝えたいこと</span><br>
+<span class="chief-text">${esc(chiefComplaint)}</span></div>`;
+  }
+
+  // --- 基本情報 ---
+  // v0.18: 最終更新日を見出しに併記(医師が情報の鮮度を判断できるように)
+  const updatedTag = state.group1SavedAt
+    ? `<small style="font-weight:400;font-size:10px">(最終更新: ${formatDate(state.group1SavedAt.slice(0, 10))})</small>`
+    : "";
+  html += `<h2>基本情報 ${updatedTag}</h2>`;
+  const head = [];
+  if (age !== null) head.push(`${age}歳`);
+  if (g.sex) head.push(esc(g.sex));
+  if (g.heightCm) head.push(`身長 ${g.heightCm}cm`);
+  if (bmi) head.push(`BMI ${bmi}`);
+  if (head.length) html += `<p class="kv">${head.join("　")}</p>`;
+  // アレルギーは最優先で目立たせる
+  // v0.17.3: 記載の有無にかかわらず口頭確認を促す
+  // (登録後に発覚したアレルギーが反映されていない可能性があるため。
+  //  「なし」と断定表示せず、未記入は未記入と正直に示す)
+  const allergyText = g.allergies && g.allergies.length
+    ? `${esc(g.allergies.join("、"))}(本人申告)`
+    : "記入なし";
+  html += `<p class="allergy">アレルギー: ${allergyText}<br>
+<small style="font-weight:400">※登録後に判明したアレルギーは反映されていない可能性があります。口頭でもご確認ください</small></p>`;
+  html += `<p class="kv"><b>内服薬</b>${g.medications && g.medications.length ? esc(g.medications.join("、")) : "なし"}</p>`;
+  if (g.supplements && g.supplements.length) html += `<p class="kv"><b>サプリ</b>${esc(g.supplements.join("、"))}</p>`;
+  html += `<p class="kv"><b>既往歴</b>${g.medicalHistory && g.medicalHistory.length ? esc(g.medicalHistory.join("、")) : "特になし"}</p>`;
+  html += `<p class="kv"><b>家族歴</b>${g.familyHistory && g.familyHistory.length ? esc(g.familyHistory.join("、")) : "特になし"}</p>`;
+
+  // --- 検査値 ---
+  const items = collectSummaryItems();
+  if (items.length) {
+    html += `<h2>検査値(直近3回・判定つき)</h2>
+<table><tr><th>項目</th><th>判定</th><th colspan="3">推移(古い→新しい)</th></tr>`;
+    items.forEach(it => {
+      const last3 = it.series.slice(-3);
+      const cells = [];
+      for (let i = 0; i < 3 - last3.length; i++) cells.push("<td></td>");
+      last3.forEach(pt => {
+        cells.push(`<td>${pt.date.slice(2)}<br><b>${esc(pt.value)}</b></td>`);
+      });
+      const flag = (it.grade === "C" || it.grade === "D");
+      const gradeText = it.grade ? `${it.grade}${it.ogtt ? "※" : ""}` : "—";
+      html += `<tr><td${flag ? ' class="flag"' : ""}>${esc(it.name)}${it.unit ? `<br><small>${esc(it.unit)}</small>` : ""}</td>
+<td${flag ? ' class="flag"' : ""}>${gradeText}</td>${cells.join("")}</tr>`;
+    });
+    html += `</table>`;
+    if (items.some(it => it.ogtt)) {
+      html += `<p class="sheet-note">※血糖はブドウ糖負荷試験(OGTT)が推奨される範囲</p>`;
+    }
+  } else {
+    html += `<h2>検査値</h2><p class="kv">登録なし</p>`;
+  }
+
+  html += `<p class="sheet-note">判定区分は日本人間ドック・予防医療学会「判定区分(2026年4月1日改定)」の引用(A=異常なし/B=軽度異常/C=要再検査・生活改善/D=要精密検査・治療)。判定は健診機関により異なる場合があります。本書は本人がアプリ「けんこうカルテ」で作成した自己申告のまとめであり、診断書ではありません。</p>`;
+
+  return html;
+}
+
+function initSummary() {
+  $("#summaryBtn").addEventListener("click", () => {
+    if (!state.group1 && !state.group2.length) {
+      showToast("先にマイデータを入力してね"); return;
+    }
+    // v0.18: 基本情報が古い(90日以上)可能性があれば、作成前に一度だけ確認する
+    // (お薬・アレルギーなどは登録後に変わることが多いのに、都度更新する人は
+    //  少ない。更新の動機がいちばん高い「受診直前」に声をかける)
+    if (state.group1) {
+      const savedAt = state.group1SavedAt;
+      const days = savedAt ? (Date.now() - new Date(savedAt)) / 86400000 : Infinity;
+      if (days >= 90) {
+        const period = savedAt ? `${Math.floor(days / 30)}か月ほど前` : "だいぶ前";
+        const ok = confirm(
+          `基本情報を保存したのは${period}のようです。\n` +
+          `いま飲んでいる薬・アレルギーなどに変わりがなければ、このまま「OK」で作成します。\n` +
+          `変わったことがあれば「キャンセル」を押してください。基本情報の画面をひらきます。`
+        );
+        if (!ok) {
+          showScreen("mydata");
+          fillG1Form();
+          $("#g1Details").open = true;
+          $("#g1Details").scrollIntoView({ behavior: "smooth" });
+          showToast("内容を直して「基本情報を保存する」を押してね");
+          return;
+        }
+      }
+    }
+    const chief = $("#chiefComplaint").value.trim();
+    $("#printSheet").innerHTML = buildSummarySheet(chief);
+    $("#summaryOverlay").hidden = false;
+    window.scrollTo(0, 0);
+  });
+  $("#printSummaryBtn").addEventListener("click", () => window.print());
+  $("#closeSummaryBtn").addEventListener("click", () => {
+    $("#summaryOverlay").hidden = true;
+  });
+}
+
+/* ============================================================
    8. ユーティリティ
    ============================================================ */
 function localISOString(d) {
@@ -2296,6 +2694,7 @@ function boot() {
   initG1();
   initLabSet();
   initAI();
+  initSummary();
   initSettings();
   initNav();
 
@@ -2303,6 +2702,13 @@ function boot() {
     enterApp();
   } else {
     showScreen("onboarding");
+  }
+
+  // PWA: オフラインでも起動できるようにする(sw.jsが無い環境では静かにスキップ)
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
   }
 }
 
