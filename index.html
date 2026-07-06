@@ -16,7 +16,18 @@
 <meta name="apple-mobile-web-app-title" content="けんこうカルテ">
 <!--
   ============================================================
-  健康管理アプリ MVP v0.18
+  健康管理アプリ MVP v0.18.1
+  v0.18.1: 【重要】ホーム画面起動時にバックアップが保存されない不具合を修正
+   - iOSではstandalone(ホーム画面起動)のWebアプリ内でダウンロードが機能せず、
+     プレビュー画面が開いて✕で破棄される(「保存しました」が嘘になっていた)。
+     実機の保存→削除→復元テストで発覚
+   - 対策: standaloneでは共有シートを直接開き「ファイルに保存」を選んでもらう
+     (この環境ではダウンロード自体が不可能なため共有シートが唯一の手段。
+      ブラウザ起動では従来どおりワンタップでダウンロード完了)
+   - 共有をキャンセルした場合は「保存済み」の記録を巻き戻す
+     (保存していないのにバナーが消える・保存日時が更新される事故を防ぐ)
+   - 古いiOS等で共有シート非対応の場合は従来方式+案内トーストに切り替え
+   - 設定画面の説明文にホーム画面起動時の手順を追記
   v0.18: 基本情報の「鮮度」対策(薬・アレルギー等は登録後に変わりやすいため)
    - 基本情報の保存日時を記録(group1SavedAt)
    - 診察用サマリーの基本情報見出しに「最終更新: ◯年◯月◯日」を併記
@@ -724,7 +735,7 @@
 
     <div class="card">
       <h2>記録の保存(バックアップ)</h2>
-      <p class="note">記録はこのスマホの中にだけあります。スマホの故障や機種変更に備えて、ときどき記録をファイルとして保存しておきましょう。保存したファイルは「ファイル」アプリの「ダウンロード」に、日付つきの名前で残ります。</p>
+      <p class="note">記録はこのスマホの中にだけあります。スマホの故障や機種変更に備えて、ときどき記録をファイルとして保存しておきましょう。ホーム画面のアプリから保存するときは、共有画面で「<strong>ファイルに保存</strong>」を選んでください。</p>
       <div style="height:10px"></div>
       <button class="btn-ghost" id="exportBtn">記録をファイルに保存する</button>
       <div style="height:8px"></div>
@@ -2286,25 +2297,66 @@ function renderAllMemos() {
 
 /* ---------- 設定 ---------- */
 
-/* バックアップの実行(v0.17で共通化)
-   設定画面の「記録をファイルに保存する」と、ホームのバナーの
-   「今すぐバックアップ」の両方から呼ばれる。
-   ファイル名は日付入り(上書き保存はWebの制約でできないため、
-   「いちばん新しい日付=最新版」で見分ける設計) */
-function doExport() {
+/* バックアップの実行(設定画面とホームのバナーの両方から呼ばれる)
+   v0.18.1: ホーム画面起動(standalone)ではダウンロードが機能しない
+   iOSの制約に対応。standaloneでは共有シートを開き「ファイルに保存」を
+   選んでもらう。ブラウザ起動では従来どおりワンタップでダウンロード。
+   ファイル名は日付入り(「いちばん新しい日付=最新版」で見分ける設計) */
+async function doExport() {
+  const prevExportAt = state.lastExportAt;
+  const prevCount = state.memosSinceExport;
   state.lastExportAt = localISOString(new Date());
   state.memosSinceExport = 0;
   saveData();
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const json = JSON.stringify(state, null, 2);
+  const filename = `けんこうカルテの記録_${todayString()}.json`;
+
+  // ホーム画面起動: ダウンロード不可のため共有シートで保存してもらう
+  if (isStandalone() && navigator.canShare && typeof File !== "undefined") {
+    try {
+      const file = new File([json], filename, { type: "application/json" });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "けんこうカルテの記録" });
+        updateExportNote();
+        $("#backupBanner").hidden = true;
+        refreshSettingsDot();
+        showToast("「ファイルに保存」を選んだ場合、ファイルアプリに保存されています");
+        return;
+      }
+    } catch (e) {
+      // 共有をキャンセルした場合は「保存していない」状態に巻き戻す
+      state.lastExportAt = prevExportAt;
+      state.memosSinceExport = prevCount;
+      saveData();
+      updateExportNote();
+      if (e && e.name === "AbortError") {
+        showToast("保存を中止しました(まだ保存されていません)");
+        return;
+      }
+      // 共有シート非対応などの想定外エラーは下の従来方式にフォールバック
+      state.lastExportAt = localISOString(new Date());
+      state.memosSinceExport = 0;
+      saveData();
+    }
+  }
+
+  // ブラウザ起動(または共有シート非対応): 従来どおりダウンロード
+  const blob = new Blob([json], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `けんこうカルテの記録_${todayString()}.json`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(a.href);
   updateExportNote();
   $("#backupBanner").hidden = true;
   refreshSettingsDot();
-  showToast("保存しました!「ファイル」アプリのダウンロードに入っています");
+  if (isStandalone()) {
+    // ここに来るのは古いiOSなど。プレビューが開いたら✕ではなく
+    // 共有から「ファイルに保存」を選んでもらう必要がある
+    showToast("画面が開いたら「その他…」→「ファイルに保存」を選んでね(✕は保存されません)");
+  } else {
+    showToast("保存しました!「ファイル」アプリのダウンロードに入っています");
+  }
 }
 
 function initSettings() {
