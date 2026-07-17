@@ -16,7 +16,25 @@
 <meta name="apple-mobile-web-app-title" content="けんこうカルテ">
 <!--
   ============================================================
-  健康管理アプリ MVP v0.19.0
+  健康管理アプリ MVP v0.20.0
+  v0.20.0: 診察用サマリーを「数値の運搬」から「文脈の運搬」へ刷新
+   - 検査値の表(直近3回の推移)を削除。かわりに「健診で指摘されている
+     項目」としてC・D判定の項目名+判定+健診日だけを1〜2行で記載
+     (数値の転記をやめることで誤入力が診療の方向を誤らせるリスクを
+      なくす。正確な数値は健診原本やマイナポータル等の公式データの
+      役割で、本アプリは張り合わない。かぞくカルテのlabFindingsと
+      同じ設計判断。C・D判定が無いときはこの欄自体を出さない
+      =「指摘なし」と断定表示しない。未記入≠なしの原則)
+   - 「今日伝えたいこと」を3つの問いに分割(すべて任意・書いた分だけ載る):
+     ①いつから・どんなときに・どう変わってきたか(経過の時系列)
+     ②いちばん心配なこと・今日きいてみたいこと(診察のゴール)
+     ③自分で試したこと(市販薬・サプリ・湿布など=レセプトに載らない情報)
+     白紙の自由記入欄では書けない人のために、問診の型で導く
+     (SBAR/OPQRSTの患者側版。ICU看護師の発案)
+   - 検査値の入力・推移表示・AI相談機能は変更なし(自分の健康管理と
+     AI相談のための機能であり、役割が違うため)
+   - 位置づけを「受診前の整理メモ」に変更(病院の問診票と競合しない。
+     問診票や診察の下書きに使えて、そのまま渡してもOKという説明に)
   v0.19.0: かぞくカルテへの書き出し機能を追加(sw.jsのCACHE_NAMEも同時更新)
    - 設定画面に「かぞくカルテへの書き出し」カードを追加。基本情報
      (生まれた年月・身長・既往歴・内服薬・アレルギー)と、健診でC・D判定が
@@ -487,6 +505,9 @@
   }
   #printSheet .chief .chief-label { font-size: 10.5px; font-weight: 700; }
   #printSheet .chief .chief-text { font-size: 14px; font-weight: 700; }
+  #printSheet .chief .chief-sub { margin: 5px 0 0; }
+  #printSheet .chief .chief-sub .cs-label { font-size: 10px; font-weight: 700; color: #333; display: block; }
+  #printSheet .chief .chief-sub .cs-text { font-size: 12.5px; font-weight: 700; }
   #printSheet h2 {
     font-size: 13px; margin: 12px 0 4px; padding-bottom: 2px;
     border-bottom: 1.5px solid #111;
@@ -763,9 +784,13 @@
 
     <div class="card">
       <h2>診察用サマリー</h2>
-      <p class="note">お医者さんに見せるA4一枚を作ります。基本情報と検査値だけをまとめます。日々のメモ(私的な記録)は載りません。</p>
-      <label for="chiefComplaint">今日伝えたいこと(任意・いちばん上に大きく載ります)</label>
-      <textarea id="chiefComplaint" rows="2" placeholder="例: 3週間前から朝の頭痛が続いている"></textarea>
+      <p class="note">受診の前に、伝えたいことをA4一枚に整理します。病院の問診票を書くときや診察で話すときの下書きに使えて、そのままお医者さんに渡してもOK。下の3つは書けるところだけで大丈夫、書いた分だけ紙に載ります(検査の数値は載せません。数値は健診の結果用紙が正式な情報です)。</p>
+      <label for="chiefTimeline">① いつから・どこが・どんなときに・どう変わってきたか</label>
+      <textarea id="chiefTimeline" rows="3" placeholder="例: 3週間前から、右の腰が、朝起きたときに痛い。だんだん強くなっている&#10;例: 1か月前からずっと体がだるい(場所のない症状はそのままでOK)"></textarea>
+      <label for="chiefConcern">② いちばん心配なこと・今日きいてみたいこと</label>
+      <textarea id="chiefConcern" rows="2" placeholder="例: 悪い病気じゃないか心配。薬を始めるべきか知りたい"></textarea>
+      <label for="chiefSelfcare">③ 自分で試したこと(市販薬・サプリ・湿布など)</label>
+      <textarea id="chiefSelfcare" rows="2" placeholder="例: 市販の頭痛薬を週2回くらい。飲むと少し楽になる"></textarea>
       <div style="height:10px"></div>
       <button class="btn-ghost" id="summaryBtn">サマリーを作る</button>
     </div>
@@ -2519,7 +2544,7 @@ async function exportForKazoku() {
   const payload = {
     kazokuShare: true,
     appVersion: "0.3.0",
-    exportedFrom: "けんこうカルテ v0.19.0",
+    exportedFrom: "けんこうカルテ v0.20.0",
     person: { id: state.kazokuExportId, data }
   };
   const json = JSON.stringify(payload, null, 2);
@@ -2801,7 +2826,7 @@ function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function buildSummarySheet(chiefComplaint) {
+function buildSummarySheet(chief) {
   const g = state.group1 || {};
   const age = calcAge(g.birthYearMonth);
   const bmi = calcBMI();
@@ -2810,9 +2835,20 @@ function buildSummarySheet(chiefComplaint) {
   let html = `<h1>診察用サマリー</h1>
 <p class="sheet-date">作成日: ${today}(本人がアプリで作成した自己申告情報)</p>`;
 
-  if (chiefComplaint) {
-    html += `<div class="chief"><span class="chief-label">今日伝えたいこと</span><br>
-<span class="chief-text">${esc(chiefComplaint)}</span></div>`;
+  // --- 今日伝えたいこと(3つの問い・書いた分だけ載せる) ---
+  // v0.20: 白紙の自由記入では書けない人のために問診の型で導く。
+  // どのデータベースにも載らない「本人の言葉」がこの紙の主役
+  const chiefRows = [
+    { label: "いつから・どこが・経過", text: chief.timeline },
+    { label: "心配なこと・今日の希望", text: chief.concern },
+    { label: "自分で試したこと(市販薬・サプリなど)", text: chief.selfcare }
+  ].filter(r => r.text);
+  if (chiefRows.length) {
+    html += `<div class="chief"><span class="chief-label">今日伝えたいこと</span>`;
+    chiefRows.forEach(r => {
+      html += `<div class="chief-sub"><span class="cs-label">${esc(r.label)}</span><span class="cs-text">${esc(r.text)}</span></div>`;
+    });
+    html += `</div>`;
   }
 
   // --- 基本情報 ---
@@ -2836,45 +2872,49 @@ function buildSummarySheet(chiefComplaint) {
     : "記入なし";
   html += `<p class="allergy">アレルギー: ${allergyText}<br>
 <small style="font-weight:400">※登録後に判明したアレルギーは反映されていない可能性があります。口頭でもご確認ください</small></p>`;
-  html += `<p class="kv"><b>内服薬</b>${g.medications && g.medications.length ? esc(g.medications.join("、")) : "なし"}</p>`;
+  // v0.20: 基本情報が未登録のときは「なし」ではなく「記入なし」と表示する。
+  // 「なし」は本人がフォームを見たうえで空欄にした(=申告)ときだけ。
+  // 未記入を「なし」と断定すると医師が「服薬なし」等と誤読する実害がある
+  // (アレルギー欄で確立した未記入≠なしの原則を全項目に適用)
+  const hasG1 = !!state.group1;
+  html += `<p class="kv"><b>内服薬</b>${g.medications && g.medications.length ? esc(g.medications.join("、")) : (hasG1 ? "なし" : "記入なし")}</p>`;
   if (g.supplements && g.supplements.length) html += `<p class="kv"><b>サプリ</b>${esc(g.supplements.join("、"))}</p>`;
-  html += `<p class="kv"><b>既往歴</b>${g.medicalHistory && g.medicalHistory.length ? esc(g.medicalHistory.join("、")) : "特になし"}</p>`;
-  html += `<p class="kv"><b>家族歴</b>${g.familyHistory && g.familyHistory.length ? esc(g.familyHistory.join("、")) : "特になし"}</p>`;
+  html += `<p class="kv"><b>既往歴</b>${g.medicalHistory && g.medicalHistory.length ? esc(g.medicalHistory.join("、")) : (hasG1 ? "特になし" : "記入なし")}</p>`;
+  html += `<p class="kv"><b>家族歴</b>${g.familyHistory && g.familyHistory.length ? esc(g.familyHistory.join("、")) : (hasG1 ? "特になし" : "記入なし")}</p>`;
 
-  // --- 検査値 ---
-  const items = collectSummaryItems();
-  if (items.length) {
-    html += `<h2>検査値(直近3回・判定つき)</h2>
-<table><tr><th>項目</th><th>判定</th><th colspan="3">推移(古い→新しい)</th></tr>`;
-    items.forEach(it => {
-      const last3 = it.series.slice(-3);
-      const cells = [];
-      for (let i = 0; i < 3 - last3.length; i++) cells.push("<td></td>");
-      last3.forEach(pt => {
-        cells.push(`<td>${pt.date.slice(2)}<br><b>${esc(pt.value)}</b></td>`);
-      });
-      const flag = (it.grade === "C" || it.grade === "D");
-      const gradeText = it.grade ? `${it.grade}${it.ogtt ? "※" : ""}` : "—";
-      html += `<tr><td${flag ? ' class="flag"' : ""}>${esc(it.name)}${it.unit ? `<br><small>${esc(it.unit)}</small>` : ""}</td>
-<td${flag ? ' class="flag"' : ""}>${gradeText}</td>${cells.join("")}</tr>`;
+  // --- 健診で指摘されている項目(C・D判定のみ・数値は載せない) ---
+  // v0.20: 数値の表を廃止。数値の転記をやめることで誤入力リスクを断ち、
+  // 医師には「何を確かめるべきか」の当たりだけを渡す。
+  // C・D判定が無いときはこの欄自体を出さない(「指摘なし」と断定しない)
+  const flagged = state.group2.length
+    ? collectSummaryItems().filter(it => it.grade === "C" || it.grade === "D")
+    : [];
+  if (flagged.length) {
+    html += `<h2>健診で指摘されている項目</h2>`;
+    flagged.forEach(it => {
+      const latest = it.series[it.series.length - 1];
+      html += `<p class="kv"><b>${esc(it.name)}</b>${it.grade}判定(${esc(HANTEI_META.labels[it.grade])})　${formatDate(latest.date)}の健診</p>`;
     });
-    html += `</table>`;
-    if (items.some(it => it.ogtt)) {
-      html += `<p class="sheet-note">※血糖はブドウ糖負荷試験(OGTT)が推奨される範囲</p>`;
-    }
-  } else {
-    html += `<h2>検査値</h2><p class="kv">登録なし</p>`;
+    html += `<p class="sheet-note">判定区分は${esc(HANTEI_META.source)}の引用(C=要再検査・生活改善/D=要精密検査・治療)。判定は健診機関により異なる場合があります。数値はこの紙に載せていません。正確な数値は健診結果の原本をご確認ください。</p>`;
   }
 
-  html += `<p class="sheet-note">判定区分は日本人間ドック・予防医療学会「判定区分(2026年4月1日改定)」の引用(A=異常なし/B=軽度異常/C=要再検査・生活改善/D=要精密検査・治療)。判定は健診機関により異なる場合があります。本書は本人がアプリ「けんこうカルテ」で作成した自己申告のまとめであり、診断書ではありません。</p>`;
+  html += `<p class="sheet-note">本書は本人がアプリ「けんこうカルテ」で作成した自己申告のまとめであり、診断書ではありません。</p>`;
 
   return html;
 }
 
 function initSummary() {
   $("#summaryBtn").addEventListener("click", () => {
-    if (!state.group1 && !state.group2.length) {
-      showToast("先にマイデータを入力してね"); return;
+    const chief = {
+      timeline: $("#chiefTimeline").value.trim(),
+      concern: $("#chiefConcern").value.trim(),
+      selfcare: $("#chiefSelfcare").value.trim()
+    };
+    // v0.20: 「受診前の整理メモ」の位置づけに合わせて、3つの問いだけでも作れる。
+    // 何もかも空のときだけ案内する
+    const hasChief = chief.timeline || chief.concern || chief.selfcare;
+    if (!state.group1 && !state.group2.length && !hasChief) {
+      showToast("上の3つのどれかを書くか、マイデータを入力してから押してね"); return;
     }
     // v0.18: 基本情報が古い(90日以上)可能性があれば、作成前に一度だけ確認する
     // (お薬・アレルギーなどは登録後に変わることが多いのに、都度更新する人は
@@ -2899,7 +2939,6 @@ function initSummary() {
         }
       }
     }
-    const chief = $("#chiefComplaint").value.trim();
     $("#printSheet").innerHTML = buildSummarySheet(chief);
     $("#summaryOverlay").hidden = false;
     window.scrollTo(0, 0);
