@@ -1,9 +1,10 @@
-/* けんこうカルテ Service Worker v1
+/* けんこうカルテ Service Worker
+   更新のたびに CACHE の番号を必ず変えること(アプリのバージョンと同じ番号にすると取り違えがない)
    方針: ネットワーク優先。
    - オンライン時: 常に最新を取得(index.htmlの更新が今まで通り反映される)
    - オフライン時: 最後に取得したキャッシュから起動する */
 
-const CACHE = "kenkou-karute-v2";
+const CACHE = "kenkou-karute-v0.19.0";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
