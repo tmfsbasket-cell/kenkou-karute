@@ -4,7 +4,7 @@
    - オンライン時: 常に最新を取得(index.htmlの更新が今まで通り反映される)
    - オフライン時: 最後に取得したキャッシュから起動する */
 
-const CACHE = "kenkou-karute-v0.19.0";
+const CACHE = "kenkou-karute-v0.20.0";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
