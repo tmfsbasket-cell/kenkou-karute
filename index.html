@@ -16,7 +16,40 @@
 <meta name="apple-mobile-web-app-title" content="けんこうカルテ">
 <!--
   ============================================================
-  健康管理アプリ MVP v0.18.1
+  健康管理アプリ MVP v0.19.0
+  v0.19.0: かぞくカルテへの書き出し機能を追加(sw.jsのCACHE_NAMEも同時更新)
+   - 設定画面に「かぞくカルテへの書き出し」カードを追加。基本情報
+     (生まれた年月・身長・既往歴・内服薬・アレルギー)と、健診でC・D判定が
+     出ている項目名だけを、かぞくカルテがそのまま読み込める形式
+     (kazokuShare)で書き出す。かぞくカルテ(v0.3.0)側は既存の「保存ファイル
+     から戻す」で読み込める。同一人物なら「ファイルに入っている項目だけを
+     置きかえる」確認になり、かぞくカルテ側で追記した緊急連絡先などは残る
+   - 検査の数値そのものと日々のメモは書き出さない(古い数値が正しい顔を
+     するのを防ぐ。数値の管理はけんこうカルテの役割という分担)。
+     C・D判定は項目名+判定+健診日のみを「検査で指摘されていること」欄へ
+   - アレルギーは「薬/食べ物/造影剤」に自動で振り分ける。造影剤・食べ物と
+     判別できないものは、安全側に倒してすべて「薬」の欄に入れる
+     (救急の現場では薬アレルギーの見落としがいちばん危険なため。
+      具体的な名前がそのまま載るので、医療者が読めば区別できる)
+   - 書き出しには本アプリ固有のID(初回書き出し時に生成し保持)を同梱。
+     同じ人のファイルを2回目以降に受け取ったかぞくカルテは上書き確認になる
+   - ファイル名は「かぞくカルテ_◯◯の情報.json」で日付を入れない
+     (LINE上で日付が青リンク化しカレンダーが誤って開く実機事象への対応。
+      かぞくカルテと同じ規約)
+   - standalone(ホーム画面起動)では共有シート、ブラウザではダウンロード
+     (v0.18.1のバックアップと同じ分岐)
+  v0.18.3: 全体レビューでの文言修正(機能変更なし)
+   - バナーの「ボタンひとつで保存」を「下のボタンからすぐに保存」に修正
+     (ホーム画面起動では共有画面での選択が入るため、両環境で正確な表現に)
+   - 初回案内の7日間削除ルールの説明に「iPhoneのSafariでは」を明記
+     (Androidには該当ルールが無く、不正確な注意喚起になっていたため)
+  v0.18.2: 初回画面に「先にホーム画面へ追加」の案内を追加
+   - iOSではSafariとホーム画面アプリで保存領域が別々(データは共有されない)。
+     データを入れたあとに追加すると「消えた」ように見えるため、
+     使い始める前の追加を促す案内カードをキャラ選択画面の冒頭に表示
+   - 案内はブラウザで開いているときだけ表示(ホーム画面起動なら不要なので非表示)
+   - iOS(共有ボタン)とAndroid(メニュー)の両方の手順を記載
+   - 追加せずそのまま始めることも可能(強制しない)
   v0.18.1: 【重要】ホーム画面起動時にバックアップが保存されない不具合を修正
    - iOSではstandalone(ホーム画面起動)のWebアプリ内でダウンロードが機能せず、
      プレビュー画面が開いて✕で破棄される(「保存しました」が嘘になっていた)。
@@ -511,6 +544,17 @@
 
   <!-- ============ キャラ選択・命名 ============ -->
   <section class="screen" id="screen-onboarding">
+    <div class="banner" id="a2hsGuide" hidden>
+      <strong>はじめる前に: ホーム画面への追加がおすすめです</strong><br>
+      <span class="note">先にホーム画面に追加してから使い始めると、記録が消えにくくなります(iPhoneのSafariでは、ブラウザのまま7日間ひらかないと記録が消えることがあります)。</span>
+      <ol style="font-size:.82rem; padding-left:1.4em; margin:6px 0 4px;">
+        <li>画面下の共有ボタン(<span aria-hidden="true">□</span>に↑のマーク)をタップ</li>
+        <li>「ホーム画面に追加」を選ぶ</li>
+        <li>ホーム画面にできたアイコンから開き直して、そこから始める</li>
+      </ol>
+      <span class="note">Androidの方はブラウザのメニュー(︙)から「ホーム画面に追加」を選んでください。追加せずにこのまま始めることもできます。</span>
+    </div>
+
     <h1>相棒をえらぼう</h1>
     <p class="note">これから一緒に健康を見守ってくれる相棒です。あとから変更もできます。</p>
     <div class="char-grid" id="charGrid"></div>
@@ -529,7 +573,7 @@
   <section class="screen" id="screen-home">
     <div class="banner" id="backupBanner" hidden>
       <strong>そろそろ記録の保存をしませんか?</strong><br>
-      <span class="note">記録はこのスマホの中にだけあります。ボタンひとつでファイルに保存できます。</span>
+      <span class="note">記録はこのスマホの中にだけあります。下のボタンからすぐに保存できます。</span>
       <div class="banner-btns">
         <button id="bannerBtn">今すぐバックアップ</button>
         <button id="bannerLaterBtn">あとで</button>
@@ -747,6 +791,16 @@
     </div>
 
     <div class="card">
+      <h2>かぞくカルテへの書き出し</h2>
+      <p class="note">家族で使うアプリ「かぞくカルテ」用のファイルを作ります。入るのは、生まれた年月・身長・これまでにかかった病気・いま飲んでいる薬・アレルギーと、健診で気になる判定が出ている項目の名前だけです。検査の数値そのものと日々のメモは入りません。</p>
+      <label for="kazokuName">かぞくカルテに表示する名前(本名など・空欄でもOK)</label>
+      <input type="text" id="kazokuName" maxlength="20" placeholder="例: 山田 太郎">
+      <div style="height:12px"></div>
+      <button class="btn-ghost" id="kazokuExportBtn">かぞくカルテ用のファイルを作る</button>
+      <p class="note" style="margin-top:8px">ホーム画面のアプリから作ると、そのままLINEやメールで家族に送れます。ブラウザから作った場合はダウンロードとして保存されるので、そのファイルを家族に送ってください。受け取った家族は、かぞくカルテの「せってい」→「保存ファイルから戻す」で読み込めます。</p>
+    </div>
+
+    <div class="card">
       <h2>相棒</h2>
       <label for="renameChar">相棒の名前</label>
       <input type="text" id="renameChar" maxlength="10">
@@ -808,7 +862,9 @@ function defaultData() {
     memosSinceExport: 0,
     bannerSnoozedDate: null,
     lastLabTouchedAt: null,
-    group1SavedAt: null
+    group1SavedAt: null,
+    kazokuExportId: null,
+    kazokuExportName: null
   };
 }
 
@@ -1550,6 +1606,11 @@ function initDisclaimer() {
 let selectedCharType = null;
 
 function initOnboarding() {
+  // v0.18.2: ブラウザで開いている(=ホーム画面起動でない)ときだけ、
+  // ホーム画面追加の案内を表示する。データを入れてから追加すると
+  // 保存領域が別になり「消えた」ように見えるため、先に追加してもらう
+  if (!isStandalone()) $("#a2hsGuide").hidden = false;
+
   const grid = $("#charGrid");
   Object.entries(CHARACTERS).forEach(([type, c]) => {
     const div = document.createElement("div");
@@ -2359,8 +2420,150 @@ async function doExport() {
   }
 }
 
+/* ============================================================
+   7-d. かぞくカルテへの書き出し(v0.19.0)
+   基本情報とC・D判定の項目名だけを、かぞくカルテの共有ファイル形式
+   (kazokuShare)で書き出す。検査の数値そのものと日々のメモは載せない
+   (古い数値が正しい顔をするのを防ぐ。数値の管理はけんこうカルテの役割)。
+   かぞくカルテ側は既存の「保存ファイルから戻す」でそのまま読み込める。
+   ============================================================ */
+
+/* 生まれた年月(YYYY-MM)を、かぞくカルテの自由記入欄向けの表記にする */
+function kazokuBirthText(birthYearMonth) {
+  if (!birthYearMonth) return "";
+  const [y, m] = birthYearMonth.split("-").map(Number);
+  if (!y || !m) return "";
+  return `${y}年${m}月`;
+}
+
+/* アレルギーの自動振り分けに使う語(食物アレルギーの表示義務・推奨品目が中心)
+   ここに当てはまらないものは、安全側に倒してすべて「薬」の欄に入れる
+   (救急の現場では薬アレルギーの見落としがいちばん危険なため。
+    具体的な名前がそのまま載るので、医療者が読めば区別できる)
+   ※薬の名前に含まれてしまう語は入れないこと:
+     「サバ」はアピキサバン等の抗凝固薬に、「エビ」はエビリファイに、
+     「乳」単独は乳酸カルシウム等に部分一致し、薬アレルギーを
+     食べ物欄へ誤分類してしまう。ひらがな・漢字表記(さば/鯖/えび/海老)で
+     書かれた食物は今までどおり食べ物欄に入る */
+const KAZOKU_FOOD_WORDS = [
+  "そば", "蕎麦", "卵", "たまご", "牛乳", "乳製品", "ミルク", "チーズ", "小麦",
+  "えび", "海老", "かに", "カニ", "蟹", "落花生", "ピーナッツ",
+  "くるみ", "クルミ", "ナッツ", "アーモンド", "カシュー", "大豆",
+  "ごま", "ゴマ", "キウイ", "もも", "桃", "りんご", "リンゴ",
+  "バナナ", "オレンジ", "マンゴー", "メロン", "パイナップル",
+  "さば", "鯖", "さけ", "鮭", "いか", "イカ", "いくら",
+  "あわび", "アワビ", "魚", "貝", "ゼラチン", "はちみつ", "山芋", "やまいも"
+];
+
+function classifyAllergiesForKazoku(list) {
+  const res = { drug: [], food: [], contrast: [] };
+  list.forEach(line => {
+    if (line.includes("造影")) res.contrast.push(line);
+    else if (KAZOKU_FOOD_WORDS.some(w => line.includes(w))) res.food.push(line);
+    else res.drug.push(line);
+  });
+  return res;
+}
+
+/* 「検査で指摘されていること」欄に書き出す文章を作る
+   C・D判定の項目名+判定+健診日のみ。数値は載せない */
+function buildKazokuLabFindings() {
+  if (!state.group2.length) return "";
+  const flagged = collectSummaryItems().filter(it => it.grade === "C" || it.grade === "D");
+  if (!flagged.length) return "";
+  const lines = flagged.map(it => {
+    const latest = it.series[it.series.length - 1];
+    return `${it.name}：${it.grade}判定(${HANTEI_META.labels[it.grade]}・${formatDate(latest.date)}時点)`;
+  });
+  return lines.join("／") +
+    "／※本人のけんこうカルテの健診判定(公的基準の引用)より。数値の推移は本人のアプリにあります";
+}
+
+async function exportForKazoku() {
+  const name = $("#kazokuName").value.trim();
+
+  // かぞくカルテにある項目に対応する情報だけを集める(空欄の項目は載せない)
+  const data = {};
+  if (name) data.name = name;
+  const g = state.group1;
+  if (g) {
+    const birth = kazokuBirthText(g.birthYearMonth);
+    if (birth) data.birth = birth;
+    if (g.heightCm) data.height = `${g.heightCm}cm`;
+    if (g.medicalHistory && g.medicalHistory.length) data.history = g.medicalHistory.join("／");
+    if (g.medications && g.medications.length) data.meds = g.medications.join("／");
+    if (g.allergies && g.allergies.length) {
+      const c = classifyAllergiesForKazoku(g.allergies);
+      if (c.drug.length)     { data.allergyDrug = "あり";     data.allergyDrugDetail = c.drug.join("、"); }
+      if (c.food.length)     { data.allergyFood = "あり";     data.allergyFoodDetail = c.food.join("、"); }
+      if (c.contrast.length) { data.allergyContrast = "あり"; data.allergyContrastDetail = c.contrast.join("、"); }
+      // アレルギーが未記入のときは何も書き込まない(未記入と「なし」は別物)
+    }
+  }
+  const findings = buildKazokuLabFindings();
+  if (findings) data.labFindings = findings;
+
+  if (!Object.keys(data).filter(k => k !== "name").length) {
+    showToast("先に「マイデータ」で基本情報や健診結果を入力してね");
+    return;
+  }
+
+  data._updated = todayString();
+
+  // このアプリ固有のIDを初回に作って以後使い回す。
+  // 同じ人のファイルを2回目以降に受け取ったかぞくカルテは上書き確認になる
+  if (!state.kazokuExportId) state.kazokuExportId = "p" + Date.now();
+  state.kazokuExportName = name || null;
+  saveData();
+
+  const payload = {
+    kazokuShare: true,
+    appVersion: "0.3.0",
+    exportedFrom: "けんこうカルテ v0.19.0",
+    person: { id: state.kazokuExportId, data }
+  };
+  const json = JSON.stringify(payload, null, 2);
+  const pname = name || "名前未記入";
+  // ファイル名に日付を入れない(LINE上で日付が青リンク化して
+  // カレンダーが誤って開くのを防ぐ。かぞくカルテと同じ規約)
+  const filename = `かぞくカルテ_${pname}の情報.json`;
+
+  // ホーム画面起動: ダウンロード不可のため共有シートで送る/保存してもらう
+  if (isStandalone() && navigator.canShare && typeof File !== "undefined") {
+    try {
+      const file = new File([json], filename, { type: "application/json" });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        showToast("書き出しました。受け取った家族は「保存ファイルから戻す」で読み込めます");
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") {
+        showToast("書き出しを中止しました");
+        return;
+      }
+      // 共有シート非対応などの想定外エラーは下の従来方式にフォールバック
+    }
+  }
+
+  // ブラウザ起動(または共有シート非対応): ダウンロード
+  const blob = new Blob([json], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  if (isStandalone()) {
+    showToast("画面が開いたら「その他…」→「ファイルに保存」を選んでね(✕は保存されません)");
+  } else {
+    showToast("ファイルを作りました。ダウンロードしたファイルを家族に送ってね");
+  }
+}
+
 function initSettings() {
   $("#exportBtn").addEventListener("click", doExport);
+
+  $("#kazokuExportBtn").addEventListener("click", exportForKazoku);
 
   $("#importBtn").addEventListener("click", () => $("#importFile").click());
   $("#importFile").addEventListener("change", e => {
@@ -2427,6 +2630,7 @@ function initNav() {
       if (name === "settings") {
         $("#renameChar").value = state.character.name;
         $("#renameUser").value = state.character.userNickname;
+        $("#kazokuName").value = state.kazokuExportName || "";
         updateExportNote();
       }
       showScreen(name);
